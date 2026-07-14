@@ -784,11 +784,18 @@ function carregarOpcoes(){
       renderChipPicker('pickerSegmentos', opcoesConfig.segmentos, segmentosSelecionados, 'segmento');
       renderChipPicker('pickerFiliais', opcoesConfig.filiais, filiaisSelecionadas, 'filial');
     }
-  }, err=>{ console.error(err); });
+  }, err=>{
+    console.error(err);
+    toast('Erro ao carregar catálogo (verifique as regras do Firestore): '+err.message, true);
+  });
 }
 
 function salvarOpcoes(){
-  return db.collection('config').doc('opcoes').set(opcoesConfig, { merge:true });
+  return db.collection('config').doc('opcoes').set(opcoesConfig, { merge:true })
+    .catch(err=>{
+      console.error(err);
+      toast('Erro ao salvar catálogo: '+err.message, true);
+    });
 }
 
 function renderFiltrosSelect(){
@@ -1162,14 +1169,30 @@ function selecionarInstrutorAgenda(id){
   renderAgenda();
 }
 
+let agendaListeners = {}; // docId -> unsubscribe
+
 function carregarMesDeUmInstrutor(instrutorId){
   const key = docIdAgenda(instrutorId, agendaYear, agendaMonth);
-  if(agendaDocs[key]) return Promise.resolve();
-  return db.collection('agenda').doc(key).get().then(doc=>{
-    agendaDocs[key] = doc.exists ? doc.data() : { dias:{} };
-  }).catch(err=>{
-    console.error(err);
-    toast('Erro ao carregar agenda: '+err.message, true);
+  if(agendaListeners[key]) return Promise.resolve(); // já tem listener em tempo real ativo
+  return new Promise(resolve=>{
+    let primeira = true;
+    const unsub = db.collection('agenda').doc(key).onSnapshot(doc=>{
+      agendaDocs[key] = doc.exists ? doc.data() : { dias:{} };
+      if(primeira){
+        primeira = false;
+        resolve();
+      } else {
+        // mudança recebida (deste ou de outro dispositivo) — re-renderiza a tela atual
+        const ativos = instrutores.filter(i=> i.ativo !== false);
+        if(agendaViewMode==='lista') renderAgendaLista(ativos);
+        else renderAgendaGrade(ativos);
+      }
+    }, err=>{
+      console.error(err);
+      toast('Erro ao sincronizar agenda: '+err.message, true);
+      if(primeira){ primeira = false; resolve(); }
+    });
+    agendaListeners[key] = unsub;
   });
 }
 
