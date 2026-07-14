@@ -199,6 +199,51 @@
   .dot.on-pay{background:var(--orange-500);}
   .agenda-legend{display:flex; gap:18px; align-items:center; padding:12px 4px; font-size:12px; color:var(--ink-soft); flex-wrap:wrap;}
   .agenda-legend .item{display:flex; align-items:center; gap:6px;}
+
+  /* ---------- VIEW TOGGLE ---------- */
+  .view-toggle{display:flex; gap:6px; background:#fff; border:1.5px solid var(--line); padding:4px; border-radius:10px;}
+  .view-toggle button{
+    background:transparent; border:none; padding:8px 14px; border-radius:7px; font-family:'Manrope'; font-weight:700;
+    font-size:12.5px; color:var(--ink-soft); cursor:pointer;
+  }
+  .view-toggle button.active{background:var(--navy-900); color:#fff;}
+
+  /* ---------- AGENDA · LISTA (mobile-first) ---------- */
+  .instr-chip-bar{display:flex; gap:8px; overflow-x:auto; padding:14px 2px 10px; -webkit-overflow-scrolling:touch;}
+  .instr-chip{
+    flex:none; display:flex; align-items:center; gap:8px; padding:7px 14px 7px 7px; border-radius:30px;
+    background:#fff; border:1.5px solid var(--line); cursor:pointer; font-family:'Manrope'; font-weight:700; font-size:12.8px;
+    color:var(--navy-900); white-space:nowrap; transition:.15s;
+  }
+  .instr-chip img, .instr-chip .ph{width:26px; height:26px; border-radius:50%; object-fit:cover; background:var(--navy-800); color:#fff; display:flex; align-items:center; justify-content:center; font-size:11px; font-family:'Oswald';}
+  .instr-chip.active{background:var(--orange-500); border-color:var(--orange-500); color:#fff;}
+  .instr-chip.active .ph{background:rgba(255,255,255,.25);}
+
+  .agenda-list{display:flex; flex-direction:column; gap:10px; padding-bottom:10px;}
+  .day-card{
+    display:flex; align-items:stretch; gap:0; background:#fff; border:1px solid var(--line); border-radius:12px;
+    overflow:hidden; cursor:pointer; box-shadow:0 2px 8px -4px rgba(15,35,64,.15); transition:transform .1s, box-shadow .1s;
+  }
+  .day-card:hover{box-shadow:0 6px 16px -6px rgba(15,35,64,.28);}
+  .day-card:active{transform:scale(.99);}
+  .day-card.weekend{background:#faf8f2;}
+  .day-card.today{border-color:var(--orange-500); border-width:2px;}
+  .day-date{
+    flex:none; width:64px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:var(--navy-900); color:#fff; padding:10px 4px; font-family:'Oswald';
+  }
+  .day-card.weekend .day-date{background:var(--navy-700);}
+  .day-date .num{font-size:22px; font-weight:700; line-height:1;}
+  .day-date .wd{font-size:10.5px; letter-spacing:.05em; color:var(--orange-400); margin-top:3px;}
+  .day-content{flex:1; padding:11px 14px; min-width:0;}
+  .day-activity{font-family:'Manrope'; font-weight:700; font-size:14px; color:var(--ink); line-height:1.3; word-break:break-word;}
+  .day-activity.empty{color:#b8bcc4; font-weight:600; font-style:italic;}
+  .day-tags{display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;}
+  .tag{font-size:10.5px; font-weight:800; letter-spacing:.03em; padding:3px 9px; border-radius:20px;}
+  .tag.on{background:var(--navy-900); color:#fff;}
+  .tag.on.pay{background:var(--orange-500);}
+  .tag.off{background:#eef0f3; color:#9aa1ab;}
+  .day-chevron{flex:none; display:flex; align-items:center; padding:0 12px; color:#c7cbd1; font-size:18px;}
   .add-instr-agenda{padding:16px; text-align:center;}
 
   /* ---------- MODAL ---------- */
@@ -253,6 +298,19 @@
     .instr-photo-wrap{width:100%;}
     #instrutoresGrid{grid-template-columns:1fr;}
     .form-grid{grid-template-columns:1fr;}
+    main{padding:18px 12px 70px;}
+    .topbar-inner{padding:12px 14px;}
+    nav.tabs{width:100%; justify-content:center;}
+    .userbox{width:100%; justify-content:space-between;}
+    .section-head{flex-direction:column; align-items:flex-start;}
+    .section-head .view-toggle{width:100%; justify-content:center;}
+    .agenda-nav{padding:12px 10px;}
+    .agenda-nav .month-label{font-size:16px;}
+    .agenda-nav button.nav-arrow{width:38px; height:38px; font-size:18px;}
+    .day-date{width:54px;}
+    .day-date .num{font-size:19px;}
+    .toolbar{flex-direction:column;}
+    .toolbar > div{width:100%;}
   }
 </style>
 </head>
@@ -337,22 +395,36 @@
           <h2>Agenda</h2>
           <div class="section-sub">Atividade do dia, carro agendado e Paytrack por instrutor</div>
         </div>
+        <div class="view-toggle">
+          <button id="agViewLista" class="active">📱 Lista</button>
+          <button id="agViewGrade">▦ Grade</button>
+        </div>
       </div>
       <div class="agenda-nav">
         <button class="nav-arrow" id="btnMesAnterior">‹</button>
         <div class="month-label" id="agendaMonthLabel">—</div>
         <button class="nav-arrow" id="btnMesProximo">›</button>
       </div>
-      <div class="agenda-wrap">
-        <table class="agenda-table" id="agendaTable">
-          <thead><tr id="agendaHeadRow"></tr></thead>
-          <tbody id="agendaBody"></tbody>
-        </table>
+
+      <!-- ---- VISÃO LISTA (padrão, mobile-first) ---- -->
+      <div id="agendaListaWrap">
+        <div class="instr-chip-bar" id="instrChipBar"></div>
+        <div class="agenda-list" id="agendaList"></div>
       </div>
-      <div class="agenda-legend">
-        <div class="item"><span class="dot on-carro"></span> Carro agendado</div>
-        <div class="item"><span class="dot on-pay"></span> Paytrack</div>
-        <div class="item">Clique em qualquer dia para editar</div>
+
+      <!-- ---- VISÃO GRADE (tabela completa, melhor em telas grandes) ---- -->
+      <div id="agendaGradeWrap" style="display:none;">
+        <div class="agenda-wrap">
+          <table class="agenda-table" id="agendaTable">
+            <thead><tr id="agendaHeadRow"></tr></thead>
+            <tbody id="agendaBody"></tbody>
+          </table>
+        </div>
+        <div class="agenda-legend">
+          <div class="item"><span class="dot on-carro"></span> Carro agendado</div>
+          <div class="item"><span class="dot on-pay"></span> Paytrack</div>
+          <div class="item">Clique em qualquer dia para editar</div>
+        </div>
       </div>
     </section>
   </main>
@@ -824,6 +896,9 @@ document.getElementById('btnExcluirInstrutor').addEventListener('click', ()=>{
 /* =======================================================
    AGENDA
 ======================================================= */
+let agendaViewMode = 'lista'; // 'lista' | 'grade'
+let agendaSelectedInstrutor = null;
+
 document.getElementById('btnMesAnterior').addEventListener('click', ()=>{
   agendaMonth--; if(agendaMonth<1){ agendaMonth=12; agendaYear--; }
   renderAgenda();
@@ -832,9 +907,23 @@ document.getElementById('btnMesProximo').addEventListener('click', ()=>{
   agendaMonth++; if(agendaMonth>12){ agendaMonth=1; agendaYear++; }
   renderAgenda();
 });
+document.getElementById('agViewLista').addEventListener('click', ()=> setAgendaView('lista'));
+document.getElementById('agViewGrade').addEventListener('click', ()=> setAgendaView('grade'));
+function setAgendaView(mode){
+  agendaViewMode = mode;
+  document.getElementById('agViewLista').classList.toggle('active', mode==='lista');
+  document.getElementById('agViewGrade').classList.toggle('active', mode==='grade');
+  document.getElementById('agendaListaWrap').style.display = mode==='lista' ? 'block' : 'none';
+  document.getElementById('agendaGradeWrap').style.display = mode==='grade' ? 'block' : 'none';
+  renderAgenda();
+}
 
 function docIdAgenda(instrutorId, year, month){
   return `${instrutorId}_${year}-${pad2(month)}`;
+}
+function hojeISO(){
+  const h = new Date();
+  return `${h.getFullYear()}-${pad2(h.getMonth()+1)}-${pad2(h.getDate())}`;
 }
 
 function renderAgenda(){
@@ -842,14 +931,88 @@ function renderAgenda(){
   const ativos = instrutores.filter(i=> i.ativo !== false);
 
   if(ativos.length===0){
+    document.getElementById('instrChipBar').innerHTML = '';
+    document.getElementById('agendaList').innerHTML = '<div class="empty-state"><div class="big">Nenhum instrutor ativo</div><div>Cadastre instrutores na aba Instrutores para preencher a agenda.</div></div>';
     document.getElementById('agendaHeadRow').innerHTML = '';
     document.getElementById('agendaBody').innerHTML = '<tr><td style="padding:40px; text-align:center; color:var(--ink-soft);">Cadastre instrutores ativos para começar a preencher a agenda.</td></tr>';
     return;
   }
 
+  if(!agendaSelectedInstrutor || !ativos.find(i=>i.id===agendaSelectedInstrutor)){
+    agendaSelectedInstrutor = ativos[0].id;
+  }
+
+  if(agendaViewMode==='lista'){
+    renderChipBar(ativos);
+    carregarMesDeUmInstrutor(agendaSelectedInstrutor).then(()=> renderAgendaLista(ativos));
+  } else {
+    renderAgendaGrade(ativos);
+  }
+}
+
+function renderChipBar(ativos){
+  const bar = document.getElementById('instrChipBar');
+  bar.innerHTML = ativos.map(i=>{
+    const foto = i.fotoBase64
+      ? `<img src="${i.fotoBase64}" alt="">`
+      : `<span class="ph">${(i.nome||'?').trim().charAt(0).toUpperCase()}</span>`;
+    const primeiroNome = (i.nome||'').trim().split(' ')[0];
+    return `<div class="instr-chip ${i.id===agendaSelectedInstrutor?'active':''}" onclick="selecionarInstrutorAgenda('${i.id}')">${foto}${primeiroNome}</div>`;
+  }).join('');
+}
+function selecionarInstrutorAgenda(id){
+  agendaSelectedInstrutor = id;
+  renderAgenda();
+}
+
+function carregarMesDeUmInstrutor(instrutorId){
+  const key = docIdAgenda(instrutorId, agendaYear, agendaMonth);
+  if(agendaDocs[key]) return Promise.resolve();
+  return db.collection('agenda').doc(key).get().then(doc=>{
+    agendaDocs[key] = doc.exists ? doc.data() : { dias:{} };
+  }).catch(err=>{
+    console.error(err);
+    toast('Erro ao carregar agenda: '+err.message, true);
+  });
+}
+
+function renderAgendaLista(ativos){
+  const inst = ativos.find(i=> i.id===agendaSelectedInstrutor);
+  const totalDias = daysInMonth(agendaYear, agendaMonth);
+  const key = docIdAgenda(agendaSelectedInstrutor, agendaYear, agendaMonth);
+  const mesData = agendaDocs[key] || { dias:{} };
+  const hoje = hojeISO();
+
+  let html = '';
+  for(let d=1; d<=totalDias; d++){
+    const dt = new Date(agendaYear, agendaMonth-1, d);
+    const wd = dt.getDay();
+    const isWeekend = wd===0 || wd===6;
+    const dk = pad2(d);
+    const iso = `${agendaYear}-${pad2(agendaMonth)}-${dk}`;
+    const info = (mesData.dias && mesData.dias[dk]) || {};
+    const atividade = info.atividade || '';
+    const carro = !!info.carro;
+    const pay = !!info.paytrack;
+    html += `
+      <div class="day-card ${isWeekend?'weekend':''} ${iso===hoje?'today':''}" onclick="abrirModalDia('${agendaSelectedInstrutor}','${dk}')">
+        <div class="day-date"><div class="num">${dk}</div><div class="wd">${DIAS_SEMANA[wd]}</div></div>
+        <div class="day-content">
+          <div class="day-activity ${atividade?'':'empty'}">${atividade || 'Sem atividade registrada'}</div>
+          <div class="day-tags">
+            <span class="tag ${carro?'on':'off'}">🚚 Carro ${carro?'Sim':'Não'}</span>
+            <span class="tag ${pay?'on pay':'off'}">💳 Paytrack ${pay?'Sim':'Não'}</span>
+          </div>
+        </div>
+        <div class="day-chevron">›</div>
+      </div>`;
+  }
+  document.getElementById('agendaList').innerHTML = html;
+}
+
+function renderAgendaGrade(ativos){
   const totalDias = daysInMonth(agendaYear, agendaMonth);
 
-  // header
   let headHtml = '<th class="instr-col">Instrutor</th>';
   for(let d=1; d<=totalDias; d++){
     const dt = new Date(agendaYear, agendaMonth-1, d);
@@ -859,14 +1022,7 @@ function renderAgenda(){
   }
   document.getElementById('agendaHeadRow').innerHTML = headHtml;
 
-  // carregar docs necessários deste mês, depois renderizar corpo
-  const promises = ativos.map(i=>{
-    const key = docIdAgenda(i.id, agendaYear, agendaMonth);
-    if(agendaDocs[key]) return Promise.resolve();
-    return db.collection('agenda').doc(key).get().then(doc=>{
-      agendaDocs[key] = doc.exists ? doc.data() : { dias:{} };
-    });
-  });
+  const promises = ativos.map(i=> carregarMesDeUmInstrutor(i.id));
 
   Promise.all(promises).then(()=>{
     let bodyHtml = '';
