@@ -133,6 +133,32 @@
     background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:9px 14px;
   }
   .search-box input{border:none; outline:none; width:100%; font-family:'Manrope'; font-size:14px; background:transparent;}
+  .filter-select{
+    background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:9px 12px; font-family:'Manrope';
+    font-size:13.5px; color:var(--ink); min-width:170px; cursor:pointer;
+  }
+  .filter-select:focus{border-color:var(--orange-500);}
+  .chip-picker{display:flex; flex-wrap:wrap; gap:7px; padding:4px 0;}
+  .chip-picker .pick{
+    padding:6px 13px; border-radius:20px; border:1.5px solid var(--line); background:#fbfaf7; cursor:pointer;
+    font-family:'Manrope'; font-weight:600; font-size:12.5px; color:var(--ink-soft); transition:.12s; user-select:none;
+  }
+  .chip-picker .pick:hover{border-color:var(--orange-400);}
+  .chip-picker .pick.on{background:var(--orange-500); border-color:var(--orange-500); color:#fff;}
+  .chip-picker .empty-hint{font-size:12.5px; color:var(--ink-soft); font-style:italic;}
+  .catalogo-section label{display:block; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--navy-800); margin-bottom:8px;}
+  .chip-list{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; min-height:20px;}
+  .chip-list .chip-x{
+    display:flex; align-items:center; gap:6px; padding:5px 8px 5px 13px; border-radius:20px; background:var(--paper-2);
+    font-family:'Manrope'; font-weight:600; font-size:12.5px; color:var(--navy-900);
+  }
+  .chip-list .chip-x button{
+    background:rgba(192,57,43,.12); border:none; color:var(--no); width:18px; height:18px; border-radius:50%;
+    cursor:pointer; font-size:11px; line-height:1; display:flex; align-items:center; justify-content:center;
+  }
+  .add-row{display:flex; gap:8px;}
+  .add-row input{flex:1; padding:8px 11px; border:1.5px solid var(--line); border-radius:8px; font-family:'Manrope'; font-size:13px;}
+  #bulkSegmentos, #bulkFiliais{width:100%; margin-top:6px; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; font-family:'Manrope'; font-size:12.5px;}
 
   /* ---------- INSTRUTOR CARDS ---------- */
   #instrutoresGrid{display:grid; grid-template-columns:repeat(auto-fill, minmax(560px,1fr)); gap:22px;}
@@ -370,7 +396,8 @@
           <h2>Instrutores</h2>
           <div class="section-sub">Cadastro completo da equipe de instrutores DECAM</div>
         </div>
-        <div style="display:flex; gap:10px;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-outline" id="btnGerenciarCatalogo">⚙ Segmentos / Filiais</button>
           <button class="btn btn-outline" id="btnImportarPlanilha" style="display:none;">⬇ Importar dados da planilha</button>
           <button class="btn btn-dark" id="btnNovoInstrutor">+ Novo Instrutor</button>
         </div>
@@ -380,6 +407,8 @@
           <span>🔎</span>
           <input type="text" id="buscaInstrutor" placeholder="Buscar por nome, segmento, filial...">
         </div>
+        <select class="filter-select" id="filtroSegmento"><option value="">Todos os segmentos</option></select>
+        <select class="filter-select" id="filtroFilial"><option value="">Todas as filiais</option></select>
       </div>
       <div id="instrutoresGrid"></div>
       <div id="instrutoresEmpty" class="empty-state" style="display:none;">
@@ -454,9 +483,9 @@
           <label>Cargo</label>
           <input type="text" id="fCargo" value="Motorista Instrutor">
         </div>
-        <div class="form-field">
-          <label>Segmento Dedicado</label>
-          <input type="text" id="fSegmento">
+        <div class="form-field full">
+          <label>Segmentos Dedicados</label>
+          <div class="chip-picker" id="pickerSegmentos"></div>
         </div>
         <div class="form-field">
           <label>Data de Admissão</label>
@@ -491,8 +520,8 @@
           <input type="email" id="fEmail">
         </div>
         <div class="form-field full">
-          <label>Filiais Dedicadas</label>
-          <input type="text" id="fFiliais">
+          <label>Filiais Dedicadas <small style="font-weight:500; text-transform:none; letter-spacing:0; color:var(--ink-soft);">(especialistas podem atender várias)</small></label>
+          <div class="chip-picker" id="pickerFiliais"></div>
         </div>
         <div class="form-field">
           <label>FABET / Validade</label>
@@ -519,6 +548,47 @@
       <button class="btn btn-danger-ghost btn-sm" id="btnExcluirInstrutor" style="display:none;">Excluir</button>
       <button class="btn btn-outline btn-sm" id="btnCancelarInstrutor">Cancelar</button>
       <button class="btn btn-dark btn-sm" id="btnSalvarInstrutor">Salvar Instrutor</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL CATÁLOGO (SEGMENTOS / FILIAIS) ================= -->
+<div class="modal-backdrop" id="modalCatalogo">
+  <div class="modal" style="width:min(640px,100%);">
+    <div class="modal-head">
+      <h3>Segmentos e Filiais</h3>
+      <button id="fecharModalCatalogo">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="catalogo-section">
+        <label>Segmentos cadastrados</label>
+        <div class="chip-list" id="listaSegmentos"></div>
+        <div class="add-row">
+          <input type="text" id="novoSegmento" placeholder="Novo segmento (ex: Rodoviário)">
+          <button class="btn btn-dark btn-sm" id="btnAddSegmento">Adicionar</button>
+        </div>
+        <details style="margin-top:8px;">
+          <summary style="cursor:pointer; font-size:12.5px; color:var(--ink-soft);">Adicionar vários de uma vez</summary>
+          <textarea id="bulkSegmentos" rows="3" placeholder="Um por linha, ou separados por vírgula"></textarea>
+          <button class="btn btn-outline btn-sm" id="btnBulkSegmentos" style="margin-top:6px;">Adicionar em massa</button>
+        </details>
+      </div>
+      <div class="catalogo-section" style="margin-top:24px;">
+        <label>Filiais cadastradas</label>
+        <div class="chip-list" id="listaFiliais"></div>
+        <div class="add-row">
+          <input type="text" id="novaFilial" placeholder="Nova filial (ex: Betim)">
+          <button class="btn btn-dark btn-sm" id="btnAddFilial">Adicionar</button>
+        </div>
+        <details style="margin-top:8px;">
+          <summary style="cursor:pointer; font-size:12.5px; color:var(--ink-soft);">Adicionar várias de uma vez</summary>
+          <textarea id="bulkFiliais" rows="3" placeholder="Uma por linha, ou separadas por vírgula"></textarea>
+          <button class="btn btn-outline btn-sm" id="btnBulkFiliais" style="margin-top:6px;">Adicionar em massa</button>
+        </details>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-dark btn-sm" id="btnFecharCatalogo">Concluído</button>
     </div>
   </div>
 </div>
@@ -627,6 +697,11 @@ function calcProximaReciclagem(reciclagemISO){
   return fmtDateBR(d.toISOString().slice(0,10));
 }
 function pad2(n){ return String(n).padStart(2,'0'); }
+function toArr(val){
+  if(Array.isArray(val)) return val.filter(Boolean);
+  if(!val) return [];
+  return String(val).split(/\s+-\s+|\s*,\s*/).map(s=>s.trim()).filter(Boolean);
+}
 function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
 
 /* =======================================================
@@ -677,6 +752,7 @@ function iniciarApp(){
   const hoje = new Date();
   agendaYear = hoje.getFullYear();
   agendaMonth = hoje.getMonth()+1;
+  carregarOpcoes();
   carregarInstrutores();
 }
 
@@ -691,6 +767,115 @@ function switchTab(tab){
   document.getElementById('tabBtnInstrutores').classList.toggle('active', tab==='instrutores');
   document.getElementById('tabBtnAgenda').classList.toggle('active', tab==='agenda');
   if(tab==='agenda') renderAgenda();
+}
+
+/* =======================================================
+   CATÁLOGO — SEGMENTOS / FILIAIS
+======================================================= */
+let opcoesConfig = { segmentos: [], filiais: [] };
+
+function carregarOpcoes(){
+  db.collection('config').doc('opcoes').onSnapshot(doc=>{
+    opcoesConfig = doc.exists ? { segmentos: doc.data().segmentos||[], filiais: doc.data().filiais||[] } : { segmentos:[], filiais:[] };
+    renderFiltrosSelect();
+    renderCatalogoModal();
+    // re-render pickers if modal instrutor estiver aberto
+    if(document.getElementById('modalInstrutor').classList.contains('show')){
+      renderChipPicker('pickerSegmentos', opcoesConfig.segmentos, segmentosSelecionados, 'segmento');
+      renderChipPicker('pickerFiliais', opcoesConfig.filiais, filiaisSelecionadas, 'filial');
+    }
+  }, err=>{ console.error(err); });
+}
+
+function salvarOpcoes(){
+  return db.collection('config').doc('opcoes').set(opcoesConfig, { merge:true });
+}
+
+function renderFiltrosSelect(){
+  const selSeg = document.getElementById('filtroSegmento');
+  const selFil = document.getElementById('filtroFilial');
+  const vSeg = selSeg.value, vFil = selFil.value;
+  selSeg.innerHTML = '<option value="">Todos os segmentos</option>' + opcoesConfig.segmentos.map(s=>`<option value="${s}">${s}</option>`).join('');
+  selFil.innerHTML = '<option value="">Todas as filiais</option>' + opcoesConfig.filiais.map(f=>`<option value="${f}">${f}</option>`).join('');
+  selSeg.value = vSeg; selFil.value = vFil;
+}
+
+document.getElementById('btnGerenciarCatalogo').addEventListener('click', ()=>{
+  renderCatalogoModal();
+  document.getElementById('modalCatalogo').classList.add('show');
+});
+document.getElementById('fecharModalCatalogo').addEventListener('click', ()=> document.getElementById('modalCatalogo').classList.remove('show'));
+document.getElementById('btnFecharCatalogo').addEventListener('click', ()=> document.getElementById('modalCatalogo').classList.remove('show'));
+
+function renderCatalogoModal(){
+  const listSeg = document.getElementById('listaSegmentos');
+  const listFil = document.getElementById('listaFiliais');
+  listSeg.innerHTML = opcoesConfig.segmentos.length
+    ? opcoesConfig.segmentos.map(s=>`<div class="chip-x">${s}<button onclick="removerOpcao('segmentos','${s.replace(/'/g,"\\'")}')">✕</button></div>`).join('')
+    : '<span class="chip-picker empty-hint">Nenhum segmento cadastrado ainda.</span>';
+  listFil.innerHTML = opcoesConfig.filiais.length
+    ? opcoesConfig.filiais.map(f=>`<div class="chip-x">${f}<button onclick="removerOpcao('filiais','${f.replace(/'/g,"\\'")}')">✕</button></div>`).join('')
+    : '<span class="chip-picker empty-hint">Nenhuma filial cadastrada ainda.</span>';
+}
+
+function adicionarOpcao(tipo, valor){
+  valor = valor.trim();
+  if(!valor) return;
+  if(!opcoesConfig[tipo].includes(valor)){
+    opcoesConfig[tipo] = [...opcoesConfig[tipo], valor].sort((a,b)=> a.localeCompare(b,'pt-BR'));
+    salvarOpcoes();
+  }
+}
+function removerOpcao(tipo, valor){
+  if(!confirm(`Remover "${valor}" do catálogo? Instrutores que já usam esse valor não serão alterados.`)) return;
+  opcoesConfig[tipo] = opcoesConfig[tipo].filter(v=> v!==valor);
+  salvarOpcoes();
+}
+
+document.getElementById('btnAddSegmento').addEventListener('click', ()=>{
+  const inp = document.getElementById('novoSegmento');
+  adicionarOpcao('segmentos', inp.value); inp.value = '';
+});
+document.getElementById('btnAddFilial').addEventListener('click', ()=>{
+  const inp = document.getElementById('novaFilial');
+  adicionarOpcao('filiais', inp.value); inp.value = '';
+});
+document.getElementById('btnBulkSegmentos').addEventListener('click', ()=>{
+  const ta = document.getElementById('bulkSegmentos');
+  const itens = ta.value.split(/[\n,]/).map(s=>s.trim()).filter(Boolean);
+  const novos = itens.filter(v=> !opcoesConfig.segmentos.includes(v));
+  opcoesConfig.segmentos = [...opcoesConfig.segmentos, ...novos].sort((a,b)=> a.localeCompare(b,'pt-BR'));
+  salvarOpcoes(); ta.value='';
+});
+document.getElementById('btnBulkFiliais').addEventListener('click', ()=>{
+  const ta = document.getElementById('bulkFiliais');
+  const itens = ta.value.split(/[\n,]/).map(s=>s.trim()).filter(Boolean);
+  const novos = itens.filter(v=> !opcoesConfig.filiais.includes(v));
+  opcoesConfig.filiais = [...opcoesConfig.filiais, ...novos].sort((a,b)=> a.localeCompare(b,'pt-BR'));
+  salvarOpcoes(); ta.value='';
+});
+
+/* picker genérico usado no formulário de instrutor */
+function renderChipPicker(containerId, opcoesList, selecionadosArr, tipoLabel){
+  const el = document.getElementById(containerId);
+  if(opcoesList.length===0){
+    el.innerHTML = `<span class="empty-hint">Nenhum ${tipoLabel} cadastrado. Use "⚙ Segmentos / Filiais" para cadastrar.</span>`;
+    return;
+  }
+  el.innerHTML = opcoesList.map(op=>{
+    const on = selecionadosArr.includes(op);
+    return `<div class="pick ${on?'on':''}" data-val="${op}">${op}</div>`;
+  }).join('');
+  el.querySelectorAll('.pick').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const v = chip.dataset.val;
+      const isSeg = containerId==='pickerSegmentos';
+      const arr = isSeg ? segmentosSelecionados : filiaisSelecionadas;
+      const idx = arr.indexOf(v);
+      if(idx>-1) arr.splice(idx,1); else arr.push(v);
+      renderChipPicker(containerId, opcoesList, arr, tipoLabel);
+    });
+  });
 }
 
 /* =======================================================
@@ -710,16 +895,24 @@ function carregarInstrutores(){
 }
 
 document.getElementById('buscaInstrutor').addEventListener('input', renderInstrutores);
+document.getElementById('filtroSegmento').addEventListener('change', renderInstrutores);
+document.getElementById('filtroFilial').addEventListener('change', renderInstrutores);
 
 function renderInstrutores(){
   const termo = document.getElementById('buscaInstrutor').value.trim().toLowerCase();
+  const filtroSeg = document.getElementById('filtroSegmento').value;
+  const filtroFil = document.getElementById('filtroFilial').value;
   const grid = document.getElementById('instrutoresGrid');
   const empty = document.getElementById('instrutoresEmpty');
   grid.innerHTML = '';
 
   const filtrados = instrutores.filter(i=>{
+    const segs = toArr(i.segmentoDedicado);
+    const fils = toArr(i.filiaisDedicado);
+    if(filtroSeg && !segs.includes(filtroSeg)) return false;
+    if(filtroFil && !fils.includes(filtroFil)) return false;
     if(!termo) return true;
-    const alvo = [i.nome, i.segmentoDedicado, i.filiaisDedicado, i.cargo].join(' ').toLowerCase();
+    const alvo = [i.nome, segs.join(' '), fils.join(' '), i.cargo].join(' ').toLowerCase();
     return alvo.includes(termo);
   });
 
@@ -741,7 +934,7 @@ function renderInstrutores(){
         <div class="instr-photo-wrap">${fotoHtml}</div>
         <div class="instr-info">
           <div class="info-row"><div class="k">Cargo</div><div class="v">${i.cargo||'—'}</div></div>
-          <div class="info-row"><div class="k">Segmento Dedicado</div><div class="v">${i.segmentoDedicado||'—'}</div></div>
+          <div class="info-row"><div class="k">Segmento Dedicado</div><div class="v">${toArr(i.segmentoDedicado).join(', ')||'—'}</div></div>
           <div class="info-row"><div class="k">Data de Admissão</div><div class="v">${fmtDateBR(i.dataAdmissao)}</div></div>
           <div class="info-row"><div class="k">Tempo de Casa</div><div class="v">${calcTempoCasa(i.dataAdmissao)}</div></div>
           <div class="info-row"><div class="k">Última Reciclagem</div><div class="v">${i.dataUltimaReciclagem ? fmtDateBR(i.dataUltimaReciclagem) : 'indefinido'}</div></div>
@@ -750,7 +943,7 @@ function renderInstrutores(){
           <div class="info-row"><div class="k">Celular</div><div class="v">${i.celular||'—'}</div></div>
           <div class="info-row"><div class="k">Contato</div><div class="v">${i.contato||'—'}</div></div>
           <div class="info-row"><div class="k">Email</div><div class="v">${i.email||'—'}</div></div>
-          <div class="info-row"><div class="k">Filiais Dedicadas</div><div class="v">${i.filiaisDedicado||'—'}</div></div>
+          <div class="info-row"><div class="k">Filiais Dedicadas</div><div class="v">${toArr(i.filiaisDedicado).join(', ')||'Atende todas / especialista'}</div></div>
           <div class="info-row"><div class="k">FABET / Validade</div><div class="v"><span class="pill ${i.fabetValidade==='SIM'?'sim':'nao'}">${i.fabetValidade||'NÃO'}</span></div></div>
           <div class="info-row"><div class="k">TPP (MOP) Validade</div><div class="v">${i.tppValidade ? fmtDateBR(i.tppValidade) : '—'}</div></div>
         </div>
@@ -773,6 +966,8 @@ function renderInstrutores(){
    MODAL INSTRUTOR — abrir / fechar / salvar
 ======================================================= */
 let fotoBase64Atual = '';
+let segmentosSelecionados = [];
+let filiaisSelecionadas = [];
 
 document.getElementById('btnNovoInstrutor').addEventListener('click', ()=> abrirModalInstrutor(null));
 document.getElementById('fecharModalInstrutor').addEventListener('click', fecharModalInstrutor);
@@ -783,14 +978,16 @@ function abrirModalInstrutor(instrutor){
   document.getElementById('modalInstrutorTitle').textContent = instrutor ? 'Editar Instrutor' : 'Novo Instrutor';
   document.getElementById('fNome').value = instrutor?.nome || '';
   document.getElementById('fCargo').value = instrutor?.cargo || 'Motorista Instrutor';
-  document.getElementById('fSegmento').value = instrutor?.segmentoDedicado || '';
+  segmentosSelecionados = toArr(instrutor?.segmentoDedicado);
+  filiaisSelecionadas = toArr(instrutor?.filiaisDedicado);
+  renderChipPicker('pickerSegmentos', opcoesConfig.segmentos, segmentosSelecionados, 'segmento');
+  renderChipPicker('pickerFiliais', opcoesConfig.filiais, filiaisSelecionadas, 'filial');
   document.getElementById('fAdmissao').value = instrutor?.dataAdmissao || '';
   document.getElementById('fReciclagem').value = instrutor?.dataUltimaReciclagem || '';
   document.getElementById('fO2P').value = instrutor?.usuarioO2P || '';
   document.getElementById('fCelular').value = instrutor?.celular || '';
   document.getElementById('fContato').value = instrutor?.contato || '';
   document.getElementById('fEmail').value = instrutor?.email || '';
-  document.getElementById('fFiliais').value = instrutor?.filiaisDedicado || '';
   document.getElementById('fFabet').value = instrutor?.fabetValidade || 'NÃO';
   document.getElementById('fTPP').value = instrutor?.tppValidade || '';
   document.getElementById('fBadge').value = instrutor?.badge || 'INSTRUTOR ESPECIALISTA DECAM';
@@ -851,14 +1048,14 @@ function salvarInstrutor(){
   const dados = {
     nome,
     cargo: document.getElementById('fCargo').value.trim(),
-    segmentoDedicado: document.getElementById('fSegmento').value.trim(),
+    segmentoDedicado: [...segmentosSelecionados],
     dataAdmissao: document.getElementById('fAdmissao').value || null,
     dataUltimaReciclagem: document.getElementById('fReciclagem').value || null,
     usuarioO2P: document.getElementById('fO2P').value.trim(),
     celular: document.getElementById('fCelular').value.trim(),
     contato: document.getElementById('fContato').value.trim(),
     email: document.getElementById('fEmail').value.trim(),
-    filiaisDedicado: document.getElementById('fFiliais').value.trim(),
+    filiaisDedicado: [...filiaisSelecionadas],
     fabetValidade: document.getElementById('fFabet').value,
     tppValidade: document.getElementById('fTPP').value || null,
     badge: document.getElementById('fBadge').value.trim() || 'INSTRUTOR ESPECIALISTA DECAM',
@@ -1125,8 +1322,15 @@ function importarDadosPlanilha(){
     return;
   }
 
+  const catalogoSegmentos = new Set();
+  const catalogoFiliais = new Set();
+
   const batchInstrutores = seed.instrutores.map(i=>{
     const { id, ...dados } = i;
+    dados.segmentoDedicado = toArr(dados.segmentoDedicado);
+    dados.filiaisDedicado = toArr(dados.filiaisDedicado);
+    dados.segmentoDedicado.forEach(s=> catalogoSegmentos.add(s));
+    dados.filiaisDedicado.forEach(f=> catalogoFiliais.add(f));
     dados.createdAt = firebase.firestore.FieldValue.serverTimestamp();
     dados.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
     return db.collection('instrutores').doc(id).set(dados, { merge:true });
@@ -1136,7 +1340,13 @@ function importarDadosPlanilha(){
     return db.collection('agenda').doc(docId).set(seed.agenda[docId], { merge:true });
   });
 
-  Promise.all([...batchInstrutores, ...batchAgenda])
+  const novoCatalogo = {
+    segmentos: Array.from(new Set([...opcoesConfig.segmentos, ...catalogoSegmentos])).sort((a,b)=> a.localeCompare(b,'pt-BR')),
+    filiais: Array.from(new Set([...opcoesConfig.filiais, ...catalogoFiliais])).sort((a,b)=> a.localeCompare(b,'pt-BR'))
+  };
+  const promiseCatalogo = db.collection('config').doc('opcoes').set(novoCatalogo, { merge:true });
+
+  Promise.all([...batchInstrutores, ...batchAgenda, promiseCatalogo])
     .then(()=>{
       toast('Importação concluída! ' + seed.instrutores.length + ' instrutores e ' + Object.keys(seed.agenda).length + ' meses de agenda.');
       agendaDocs = {};
