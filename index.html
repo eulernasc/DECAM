@@ -58,7 +58,7 @@
   ::-webkit-scrollbar-track{background:var(--paper-2);}
 
   /* ---------- LOGIN ---------- */
-  #loginScreen{
+  #loginScreen, #trocarSenhaScreen{
     min-height:100vh; display:flex; align-items:center; justify-content:center;
     background:
       linear-gradient(160deg, var(--navy-950) 0%, var(--navy-900) 55%, var(--navy-800) 100%);
@@ -411,6 +411,29 @@
     <button class="btn btn-primary" id="btnLogin">Entrar</button>
     <div class="login-error" id="loginError"></div>
     <div class="login-hint">Acesso restrito à equipe DECAM. Fale com o administrador do sistema caso não tenha um login.</div>
+  </div>
+</div>
+
+<!-- ================= TROCAR SENHA (primeiro acesso) ================= -->
+<div id="trocarSenhaScreen" style="display:none;">
+  <div class="login-card">
+    <div class="login-brand login-brand-logo">
+      <span style="font-size:32px;">🔑</span>
+      <span>Defina sua senha para continuar</span>
+    </div>
+    <div style="color:rgba(255,255,255,.6); font-size:12.5px; margin-bottom:22px; line-height:1.5;">
+      Você entrou com uma senha provisória. Por segurança, defina uma senha só sua antes de continuar.
+    </div>
+    <div class="field">
+      <label>Nova senha</label>
+      <input type="password" id="novaSenhaInput" placeholder="mínimo 6 caracteres" autocomplete="new-password">
+    </div>
+    <div class="field">
+      <label>Confirmar nova senha</label>
+      <input type="password" id="confirmarSenhaInput" placeholder="repita a senha" autocomplete="new-password">
+    </div>
+    <button class="btn btn-primary" id="btnTrocarSenha">Definir senha e entrar</button>
+    <div class="login-error" id="trocarSenhaError"></div>
   </div>
 </div>
 
@@ -838,6 +861,12 @@ auth.onAuthStateChanged(user=>{
   if(user){
     garantirPerfilUsuario(user).then(()=>{
       document.getElementById('loginScreen').style.display = 'none';
+      if(precisaTrocarSenha){
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('trocarSenhaScreen').style.display = 'flex';
+        return;
+      }
+      document.getElementById('trocarSenhaScreen').style.display = 'none';
       document.getElementById('app').style.display = 'block';
       document.getElementById('userEmailLabel').textContent = user.email;
       aplicarPermissoesPorPerfil();
@@ -845,18 +874,23 @@ auth.onAuthStateChanged(user=>{
     });
   } else {
     document.getElementById('app').style.display = 'none';
+    document.getElementById('trocarSenhaScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';
     currentUserRole = null;
   }
 });
 
+let precisaTrocarSenha = false;
+
 function garantirPerfilUsuario(user){
   return db.collection('usuarios').doc(user.uid).get().then(doc=>{
     if(doc.exists){
       currentUserRole = doc.data().role || 'consulta';
+      precisaTrocarSenha = doc.data().senhaProvisoria === true;
     } else {
       // primeiro login desse usuário: vira admin automaticamente (evita travar contas já existentes)
       currentUserRole = 'admin';
+      precisaTrocarSenha = false;
       return db.collection('usuarios').doc(user.uid).set({
         email: user.email, role: 'admin', createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -864,8 +898,50 @@ function garantirPerfilUsuario(user){
   }).catch(err=>{
     console.error(err);
     currentUserRole = 'consulta'; // em caso de erro, restringe por segurança
+    precisaTrocarSenha = false;
   });
 }
+
+function liberarAppAposTrocaSenha(user){
+  document.getElementById('trocarSenhaScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('userEmailLabel').textContent = user.email;
+  aplicarPermissoesPorPerfil();
+  iniciarApp();
+}
+
+document.getElementById('btnTrocarSenha').addEventListener('click', ()=>{
+  const novaSenha = document.getElementById('novaSenhaInput').value;
+  const confirmar = document.getElementById('confirmarSenhaInput').value;
+  const errBox = document.getElementById('trocarSenhaError');
+  errBox.textContent = '';
+
+  if(novaSenha.length < 6){ errBox.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+  if(novaSenha !== confirmar){ errBox.textContent = 'As senhas não coincidem.'; return; }
+
+  const btn = document.getElementById('btnTrocarSenha');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  const user = auth.currentUser;
+  user.updatePassword(novaSenha)
+    .then(()=> db.collection('usuarios').doc(user.uid).set({ senhaProvisoria: false }, { merge:true }))
+    .then(()=>{
+      precisaTrocarSenha = false;
+      toast('Senha definida com sucesso!');
+      liberarAppAposTrocaSenha(user);
+    })
+    .catch(err=>{
+      console.error(err);
+      if(err.code === 'auth/requires-recent-login'){
+        errBox.textContent = 'Por segurança, saia e entre de novo com a senha provisória antes de trocar.';
+      } else {
+        errBox.textContent = 'Erro ao definir senha: ' + err.message;
+      }
+    })
+    .finally(()=>{
+      btn.disabled = false; btn.textContent = 'Definir senha e entrar';
+    });
+});
 
 function aplicarPermissoesPorPerfil(){
   const isAdmin = currentUserRole === 'admin';
@@ -1523,6 +1599,7 @@ function renderListaUsuarios(){
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; background:var(--paper-2); border-radius:9px;">
       <div style="min-width:0;">
         <div style="font-weight:700; font-size:13px; color:var(--navy-900); word-break:break-word;">${u.email || u.id}${u.id===meuUid ? ' (você)' : ''}</div>
+        ${u.senhaProvisoria ? '<div style="font-size:10.5px; color:var(--orange-600); font-weight:700; margin-top:2px;">⏳ ainda não trocou a senha provisória</div>' : ''}
       </div>
       <select data-uid="${u.id}" class="select-perfil-usuario" ${u.id===meuUid ? 'disabled title="Você não pode alterar seu próprio perfil"' : ''} style="padding:6px 10px; border-radius:7px; border:1.5px solid var(--line); font-family:'Manrope'; font-size:12.5px;">
         <option value="consulta" ${u.role==='consulta'?'selected':''}>Consulta</option>
@@ -1555,7 +1632,7 @@ document.getElementById('btnCriarUsuario').addEventListener('click', ()=>{
     .then(cred=>{
       const uid = cred.user.uid;
       return db.collection('usuarios').doc(uid).set({
-        email, role: perfil, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        email, role: perfil, senhaProvisoria: true, createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }).then(()=> secondaryAuth.signOut());
     })
     .then(()=>{
