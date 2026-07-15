@@ -166,6 +166,8 @@
   }
   .chip-picker .pick:hover{border-color:var(--orange-400);}
   .chip-picker .pick.on{background:var(--orange-500); border-color:var(--orange-500); color:#fff;}
+  .chip-picker .pick-especialista{border-color:var(--sky-500); color:var(--sky-600); font-weight:800; background:var(--sky-100);}
+  .chip-picker .pick-especialista.on{background:var(--sky-500); border-color:var(--sky-500); color:#fff;}
   .chip-picker .empty-hint{font-size:12.5px; color:var(--ink-soft); font-style:italic;}
   .catalogo-section label{display:block; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--navy-800); margin-bottom:8px;}
   .chip-list{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; min-height:20px;}
@@ -224,6 +226,7 @@
   .pill{display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:800; letter-spacing:.02em;}
   .pill.sim{background:#dcf3e6; color:var(--ok);}
   .pill.nao{background:#fbdedb; color:var(--no);}
+  .pill.esp{background:var(--sky-100); color:var(--sky-600); font-weight:800;}
 
   /* ---------- AGENDA ---------- */
   .agenda-nav{display:flex; align-items:center; gap:14px; background:var(--navy-900); color:#fff; padding:14px 20px; border-radius:var(--radius) var(--radius) 0 0;}
@@ -741,6 +744,11 @@ function toArr(val){
   if(!val) return [];
   return String(val).split(/\s+-\s+|\s*,\s*/).map(s=>s.trim()).filter(Boolean);
 }
+function renderTagList(val){
+  const arr = toArr(val);
+  if(arr.length===0) return '—';
+  return arr.map(v=> v==='Especialista' ? '<span class="pill esp">⭐ Especialista</span>' : v).join(', ');
+}
 function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
 
 /* =======================================================
@@ -841,8 +849,8 @@ function renderFiltrosSelect(){
   const selSeg = document.getElementById('filtroSegmento');
   const selFil = document.getElementById('filtroFilial');
   const vSeg = selSeg.value, vFil = selFil.value;
-  selSeg.innerHTML = '<option value="">Todos os segmentos</option>' + opcoesConfig.segmentos.map(s=>`<option value="${s}">${s}</option>`).join('');
-  selFil.innerHTML = '<option value="">Todas as filiais</option>' + opcoesConfig.filiais.map(f=>`<option value="${f}">${f}</option>`).join('');
+  selSeg.innerHTML = '<option value="">Todos os segmentos</option><option value="Especialista">⭐ Especialista (atende todos)</option>' + opcoesConfig.segmentos.map(s=>`<option value="${s}">${s}</option>`).join('');
+  selFil.innerHTML = '<option value="">Todas as filiais</option><option value="Especialista">⭐ Especialista (atende todas)</option>' + opcoesConfig.filiais.map(f=>`<option value="${f}">${f}</option>`).join('');
   selSeg.value = vSeg; selFil.value = vFil;
 }
 
@@ -904,14 +912,16 @@ document.getElementById('btnBulkFiliais').addEventListener('click', ()=>{
 /* picker genérico usado no formulário de instrutor */
 function renderChipPicker(containerId, opcoesList, selecionadosArr, tipoLabel){
   const el = document.getElementById(containerId);
-  if(opcoesList.length===0){
-    el.innerHTML = `<span class="empty-hint">Nenhum ${tipoLabel} cadastrado. Use "⚙ Segmentos / Filiais" para cadastrar.</span>`;
-    return;
-  }
-  el.innerHTML = opcoesList.map(op=>{
+  const onEsp = selecionadosArr.includes('Especialista');
+  let html = `<div class="pick pick-especialista ${onEsp?'on':''}" data-val="Especialista">⭐ Especialista (atende ${tipoLabel==='segmento'?'todos':'todas'})</div>`;
+  html += opcoesList.map(op=>{
     const on = selecionadosArr.includes(op);
     return `<div class="pick ${on?'on':''}" data-val="${op}">${op}</div>`;
   }).join('');
+  if(opcoesList.length===0){
+    html += `<span class="empty-hint">Nenhum ${tipoLabel} cadastrado ainda. Use "⚙ Segmentos / Filiais" para cadastrar mais opções.</span>`;
+  }
+  el.innerHTML = html;
   el.querySelectorAll('.pick').forEach(chip=>{
     chip.addEventListener('click', ()=>{
       const v = chip.dataset.val;
@@ -955,8 +965,8 @@ function renderInstrutores(){
   const filtrados = instrutores.filter(i=>{
     const segs = toArr(i.segmentoDedicado);
     const fils = toArr(i.filiaisDedicado);
-    if(filtroSeg && !segs.includes(filtroSeg)) return false;
-    if(filtroFil && !fils.includes(filtroFil)) return false;
+    if(filtroSeg && !segs.includes(filtroSeg) && !segs.includes('Especialista')) return false;
+    if(filtroFil && !fils.includes(filtroFil) && !fils.includes('Especialista')) return false;
     if(!termo) return true;
     const alvo = [i.nome, segs.join(' '), fils.join(' '), i.cargo].join(' ').toLowerCase();
     return alvo.includes(termo);
@@ -980,7 +990,7 @@ function renderInstrutores(){
         <div class="instr-photo-wrap">${fotoHtml}</div>
         <div class="instr-info">
           <div class="info-row"><div class="k">Cargo</div><div class="v">${i.cargo||'—'}</div></div>
-          <div class="info-row"><div class="k">Segmento Dedicado</div><div class="v">${toArr(i.segmentoDedicado).join(', ')||'—'}</div></div>
+          <div class="info-row"><div class="k">Segmento Dedicado</div><div class="v">${renderTagList(i.segmentoDedicado)}</div></div>
           <div class="info-row"><div class="k">Data de Admissão</div><div class="v">${fmtDateBR(i.dataAdmissao)}</div></div>
           <div class="info-row"><div class="k">Tempo de Casa</div><div class="v">${calcTempoCasa(i.dataAdmissao)}</div></div>
           <div class="info-row"><div class="k">Última Reciclagem</div><div class="v">${i.dataUltimaReciclagem ? fmtDateBR(i.dataUltimaReciclagem) : 'indefinido'}</div></div>
@@ -989,7 +999,7 @@ function renderInstrutores(){
           <div class="info-row"><div class="k">Celular</div><div class="v">${i.celular||'—'}</div></div>
           <div class="info-row"><div class="k">Contato</div><div class="v">${i.contato||'—'}</div></div>
           <div class="info-row"><div class="k">Email</div><div class="v">${i.email||'—'}</div></div>
-          <div class="info-row"><div class="k">Filiais Dedicadas</div><div class="v">${toArr(i.filiaisDedicado).join(', ')||'Atende todas / especialista'}</div></div>
+          <div class="info-row"><div class="k">Filiais Dedicadas</div><div class="v">${renderTagList(i.filiaisDedicado)}</div></div>
           <div class="info-row"><div class="k">FABET / Validade</div><div class="v"><span class="pill ${i.fabetValidade==='SIM'?'sim':'nao'}">${i.fabetValidade||'NÃO'}</span></div></div>
           <div class="info-row"><div class="k">TPP (MOP) Validade</div><div class="v">${i.tppValidade ? fmtDateBR(i.tppValidade) : '—'}</div></div>
         </div>
