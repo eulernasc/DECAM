@@ -857,9 +857,18 @@ function traduzErroAuth(code){
   };
   return map[code] || 'Erro ao entrar. Tente novamente.';
 }
+// Contas "fundadoras": só elas podem excluir usuários, e ninguém (nem elas entre si)
+// pode alterar o perfil uma da outra pela interface.
+const SUPER_ADMINS = ['eulernasc2015@gmail.com', 'pablofidelis@expressonepomuceno.com.br'];
+
 auth.onAuthStateChanged(user=>{
   if(user){
-    garantirPerfilUsuario(user).then(()=>{
+    garantirPerfilUsuario(user).then(status=>{
+      if(status === 'sem-acesso'){
+        mensagemLoginPendente = 'Seu acesso ainda não foi liberado ou foi removido. Fale com o administrador.';
+        auth.signOut();
+        return;
+      }
       document.getElementById('loginScreen').style.display = 'none';
       if(precisaTrocarSenha){
         document.getElementById('app').style.display = 'none';
@@ -877,28 +886,30 @@ auth.onAuthStateChanged(user=>{
     document.getElementById('trocarSenhaScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';
     currentUserRole = null;
+    if(mensagemLoginPendente){
+      document.getElementById('loginError').textContent = mensagemLoginPendente;
+      mensagemLoginPendente = '';
+    }
   }
 });
 
 let precisaTrocarSenha = false;
+let mensagemLoginPendente = '';
 
 function garantirPerfilUsuario(user){
   return db.collection('usuarios').doc(user.uid).get().then(doc=>{
     if(doc.exists){
       currentUserRole = doc.data().role || 'consulta';
       precisaTrocarSenha = doc.data().senhaProvisoria === true;
-    } else {
-      // primeiro login desse usuário: vira admin automaticamente (evita travar contas já existentes)
-      currentUserRole = 'admin';
-      precisaTrocarSenha = false;
-      return db.collection('usuarios').doc(user.uid).set({
-        email: user.email, role: 'admin', createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      return 'ok';
     }
+    // Sem documento de perfil: acesso não provisionado (ou removido). Bloqueia.
+    return 'sem-acesso';
   }).catch(err=>{
     console.error(err);
     currentUserRole = 'consulta'; // em caso de erro, restringe por segurança
     precisaTrocarSenha = false;
+    return 'ok';
   });
 }
 
@@ -1595,18 +1606,33 @@ function renderListaUsuarios(){
     return;
   }
   const meuUid = auth.currentUser ? auth.currentUser.uid : null;
-  el.innerHTML = usuariosCache.map(u=>`
+  const meuEmail = auth.currentUser ? auth.currentUser.email : null;
+  const souSuperAdmin = SUPER_ADMINS.includes(meuEmail);
+
+  el.innerHTML = usuariosCache.map(u=>{
+    const ehFundador = SUPER_ADMINS.includes(u.email);
+    const souEu = u.id===meuUid;
+    const podeExcluir = souSuperAdmin && !ehFundador; // fundadores nunca são excluíveis, e só fundador exclui
+    const selectTravado = ehFundador; // perfil de fundador é fixo, ninguém muda (nem outro fundador)
+
+    return `
     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; background:var(--paper-2); border-radius:9px;">
       <div style="min-width:0;">
-        <div style="font-weight:700; font-size:13px; color:var(--navy-900); word-break:break-word;">${u.email || u.id}${u.id===meuUid ? ' (você)' : ''}</div>
+        <div style="font-weight:700; font-size:13px; color:var(--navy-900); word-break:break-word;">
+          ${u.email || u.id}${souEu ? ' (você)' : ''}${ehFundador ? ' <span style="color:var(--sky-600);">★ fundador</span>' : ''}
+        </div>
         ${u.senhaProvisoria ? '<div style="font-size:10.5px; color:var(--orange-600); font-weight:700; margin-top:2px;">⏳ ainda não trocou a senha provisória</div>' : ''}
       </div>
-      <select data-uid="${u.id}" class="select-perfil-usuario" ${u.id===meuUid ? 'disabled title="Você não pode alterar seu próprio perfil"' : ''} style="padding:6px 10px; border-radius:7px; border:1.5px solid var(--line); font-family:'Manrope'; font-size:12.5px;">
-        <option value="consulta" ${u.role==='consulta'?'selected':''}>Consulta</option>
-        <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
-      </select>
-    </div>
-  `).join('');
+      <div style="display:flex; align-items:center; gap:8px; flex:none;">
+        <select data-uid="${u.id}" class="select-perfil-usuario" ${selectTravado ? 'disabled title="Perfil de fundador é fixo"' : ''} style="padding:6px 10px; border-radius:7px; border:1.5px solid var(--line); font-family:'Manrope'; font-size:12.5px;">
+          <option value="consulta" ${u.role==='consulta'?'selected':''}>Consulta</option>
+          <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
+        </select>
+        ${podeExcluir ? `<button class="icon-btn btn-excluir-usuario" data-uid="${u.id}" data-email="${u.email||''}" title="Remover acesso" style="background:rgba(192,57,43,.12); border-color:rgba(192,57,43,.3); color:var(--no);">🗑</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
   el.querySelectorAll('.select-perfil-usuario').forEach(sel=>{
     sel.addEventListener('change', ()=>{
       const uid = sel.dataset.uid;
@@ -1614,6 +1640,17 @@ function renderListaUsuarios(){
       db.collection('usuarios').doc(uid).set({ role: novoRole }, { merge:true })
         .then(()=> toast('Perfil atualizado!'))
         .catch(err=>{ console.error(err); toast('Erro ao atualizar perfil: '+err.message, true); });
+    });
+  });
+
+  el.querySelectorAll('.btn-excluir-usuario').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const uid = btn.dataset.uid;
+      const email = btn.dataset.email;
+      if(!confirm(`Remover o acesso de ${email}? Essa pessoa não vai mais conseguir entrar no sistema (o login continua existindo no Firebase, mas sem perfil liberado aqui).`)) return;
+      db.collection('usuarios').doc(uid).delete()
+        .then(()=>{ toast('Acesso removido.'); carregarUsuarios(); })
+        .catch(err=>{ console.error(err); toast('Erro ao remover acesso: '+err.message, true); });
     });
   });
 }
@@ -1645,7 +1682,7 @@ document.getElementById('btnCriarUsuario').addEventListener('click', ()=>{
     .catch(err=>{
       console.error(err);
       const map = {
-        'auth/email-already-in-use':'Esse e-mail já está cadastrado.',
+        'auth/email-already-in-use':'Esse e-mail já tem um login no Firebase. Se você não vê essa pessoa na lista acima, é provável que seja uma conta que ficou "orfã" de uma tentativa anterior — apague esse e-mail em Firebase Console → Authentication e cadastre de novo por aqui.',
         'auth/invalid-email':'E-mail inválido.',
         'auth/weak-password':'Senha muito fraca (mínimo 6 caracteres).'
       };
