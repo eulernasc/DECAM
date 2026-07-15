@@ -352,6 +352,12 @@
 
 
   .empty-state{text-align:center; padding:60px 20px; color:var(--ink-soft);}
+  /* perfil consulta: reforço visual escondendo controles de administração */
+  body.perfil-consulta #btnNovoInstrutor,
+  body.perfil-consulta #btnGerenciarCatalogo,
+  body.perfil-consulta #btnImportarPlanilha,
+  body.perfil-consulta #btnGerenciarUsuarios,
+  body.perfil-consulta .icon-btn{display:none !important;}
   .empty-state .big{font-family:'Oswald'; font-size:20px; color:var(--navy-800); text-transform:uppercase; margin-bottom:8px;}
   .toast{
     position:fixed; bottom:24px; right:24px; background:var(--navy-900); color:#fff; padding:13px 20px; border-radius:9px;
@@ -425,6 +431,7 @@
       </nav>
       <div class="userbox">
         <span id="userEmailLabel"></span>
+        <button id="btnGerenciarUsuarios" style="display:none;">👤 Usuários</button>
         <button id="btnLogout">Sair</button>
       </div>
     </div>
@@ -635,6 +642,49 @@
   </div>
 </div>
 
+<!-- ================= MODAL USUÁRIOS ================= -->
+<div class="modal-backdrop" id="modalUsuarios">
+  <div class="modal" style="width:min(560px,100%);">
+    <div class="modal-head">
+      <h3>Usuários do sistema</h3>
+      <button id="fecharModalUsuarios">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="catalogo-section">
+        <label>Usuários cadastrados</label>
+        <div id="listaUsuarios" style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;"></div>
+      </div>
+      <div class="catalogo-section" style="border-top:1px solid var(--line); padding-top:18px;">
+        <label>Adicionar novo usuário</label>
+        <div class="form-grid">
+          <div class="form-field full">
+            <label>E-mail</label>
+            <input type="email" id="novoUsuarioEmail" placeholder="pessoa@expressonepomuceno.com.br">
+          </div>
+          <div class="form-field full">
+            <label>Senha provisória</label>
+            <input type="text" id="novoUsuarioSenha" placeholder="mínimo 6 caracteres">
+          </div>
+          <div class="form-field full">
+            <label>Perfil</label>
+            <select id="novoUsuarioPerfil">
+              <option value="consulta">Consulta (só vê a Agenda, sem editar)</option>
+              <option value="admin">Administrador (acesso completo)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-dark btn-sm" id="btnCriarUsuario" style="margin-top:10px;">+ Criar usuário</button>
+        <div style="font-size:11.5px; color:var(--ink-soft); margin-top:10px; line-height:1.5;">
+          O usuário poderá entrar com esse e-mail e senha. Avise a senha provisória por fora (WhatsApp, etc). Para remover totalmente o acesso de alguém, exclua o login dele no Firebase Console → Authentication.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-dark btn-sm" id="btnFecharUsuarios">Concluído</button>
+    </div>
+  </div>
+</div>
+
 <!-- ================= MODAL DIA AGENDA ================= -->
 <div class="modal-backdrop" id="modalDia">
   <div class="modal" style="width:min(440px,100%);">
@@ -692,6 +742,10 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// App secundário, usado SÓ para criar novos usuários sem deslogar o admin atual
+const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
+const secondaryAuth = secondaryApp.auth();
+
 /* =======================================================
    ESTADO GLOBAL
 ======================================================= */
@@ -700,6 +754,8 @@ let editingInstrutorId = null;
 let agendaDocs = {};          // cache: { "instrutorId_YYYY-MM": {dias:{...}} }
 let agendaYear, agendaMonth;  // mês corrente exibido (1-12)
 let diaEditando = null;       // { instrutorId, dayKey }
+let currentUserRole = null;   // 'admin' | 'consulta'
+let usuariosCache = [];       // lista de usuários (coleção 'usuarios'), só carregada para admin
 
 const MESES = ["JANEIRO","FEVEREIRO","MARÇO","ABRIL","MAIO","JUNHO","JULHO","AGOSTO","SETEMBRO","OUTUBRO","NOVEMBRO","DEZEMBRO"];
 const DIAS_SEMANA = ["DOM","SEG","TER","QUA","QUI","SEX","SÁB"];
@@ -778,19 +834,50 @@ function traduzErroAuth(code){
   };
   return map[code] || 'Erro ao entrar. Tente novamente.';
 }
-document.getElementById('btnLogout').addEventListener('click', ()=> auth.signOut());
-
 auth.onAuthStateChanged(user=>{
   if(user){
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('userEmailLabel').textContent = user.email;
-    iniciarApp();
+    garantirPerfilUsuario(user).then(()=>{
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('userEmailLabel').textContent = user.email;
+      aplicarPermissoesPorPerfil();
+      iniciarApp();
+    });
   } else {
     document.getElementById('app').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';
+    currentUserRole = null;
   }
 });
+
+function garantirPerfilUsuario(user){
+  return db.collection('usuarios').doc(user.uid).get().then(doc=>{
+    if(doc.exists){
+      currentUserRole = doc.data().role || 'consulta';
+    } else {
+      // primeiro login desse usuário: vira admin automaticamente (evita travar contas já existentes)
+      currentUserRole = 'admin';
+      return db.collection('usuarios').doc(user.uid).set({
+        email: user.email, role: 'admin', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  }).catch(err=>{
+    console.error(err);
+    currentUserRole = 'consulta'; // em caso de erro, restringe por segurança
+  });
+}
+
+function aplicarPermissoesPorPerfil(){
+  const isAdmin = currentUserRole === 'admin';
+  document.body.classList.toggle('perfil-consulta', !isAdmin);
+  document.getElementById('tabBtnInstrutores').style.display = isAdmin ? '' : 'none';
+  document.getElementById('btnGerenciarUsuarios').style.display = isAdmin ? '' : 'none';
+  if(!isAdmin){
+    switchTab('agenda');
+  }
+}
+
+document.getElementById('btnLogout').addEventListener('click', ()=> auth.signOut());
 
 let appIniciado = false;
 function iniciarApp(){
@@ -1330,6 +1417,7 @@ function abrirModalDia(instrutorId, dayKey){
   const key = docIdAgenda(instrutorId, agendaYear, agendaMonth);
   const mesData = agendaDocs[key] || { dias:{} };
   const info = (mesData.dias && mesData.dias[dayKey]) || {};
+  const isAdmin = currentUserRole === 'admin';
 
   diaEditando = {
     instrutorId, dayKey, key,
@@ -1339,6 +1427,11 @@ function abrirModalDia(instrutorId, dayKey){
   document.getElementById('fAtividade').value = info.atividade || '';
   document.getElementById('fCarro').checked = !!info.carro;
   document.getElementById('fPaytrack').checked = !!info.paytrack;
+  document.getElementById('fAtividade').disabled = !isAdmin;
+  document.getElementById('fCarro').disabled = !isAdmin;
+  document.getElementById('fPaytrack').disabled = !isAdmin;
+  document.getElementById('btnSalvarDia').style.display = isAdmin ? '' : 'none';
+  document.getElementById('btnCancelarDia').textContent = isAdmin ? 'Cancelar' : 'Fechar';
   document.getElementById('modalDia').classList.add('show');
 }
 function diaTemAlteracoesNaoSalvas(){
@@ -1394,6 +1487,95 @@ document.getElementById('btnSalvarDia').addEventListener('click', ()=>{
     })
     .finally(()=>{
       btn.disabled = false; btn.textContent = 'Salvar';
+    });
+});
+
+/* =======================================================
+   USUÁRIOS / PERFIS DE ACESSO
+======================================================= */
+document.getElementById('btnGerenciarUsuarios').addEventListener('click', ()=>{
+  document.getElementById('modalUsuarios').classList.add('show');
+  carregarUsuarios();
+});
+document.getElementById('fecharModalUsuarios').addEventListener('click', ()=> document.getElementById('modalUsuarios').classList.remove('show'));
+document.getElementById('btnFecharUsuarios').addEventListener('click', ()=> document.getElementById('modalUsuarios').classList.remove('show'));
+
+function carregarUsuarios(){
+  document.getElementById('listaUsuarios').innerHTML = '<span class="empty-hint">Carregando...</span>';
+  db.collection('usuarios').orderBy('email').get().then(snap=>{
+    usuariosCache = [];
+    snap.forEach(doc=> usuariosCache.push({ id: doc.id, ...doc.data() }));
+    renderListaUsuarios();
+  }).catch(err=>{
+    console.error(err);
+    toast('Erro ao carregar usuários: '+err.message, true);
+  });
+}
+
+function renderListaUsuarios(){
+  const el = document.getElementById('listaUsuarios');
+  if(usuariosCache.length===0){
+    el.innerHTML = '<span class="empty-hint">Nenhum usuário cadastrado ainda.</span>';
+    return;
+  }
+  const meuUid = auth.currentUser ? auth.currentUser.uid : null;
+  el.innerHTML = usuariosCache.map(u=>`
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; background:var(--paper-2); border-radius:9px;">
+      <div style="min-width:0;">
+        <div style="font-weight:700; font-size:13px; color:var(--navy-900); word-break:break-word;">${u.email || u.id}${u.id===meuUid ? ' (você)' : ''}</div>
+      </div>
+      <select data-uid="${u.id}" class="select-perfil-usuario" ${u.id===meuUid ? 'disabled title="Você não pode alterar seu próprio perfil"' : ''} style="padding:6px 10px; border-radius:7px; border:1.5px solid var(--line); font-family:'Manrope'; font-size:12.5px;">
+        <option value="consulta" ${u.role==='consulta'?'selected':''}>Consulta</option>
+        <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
+      </select>
+    </div>
+  `).join('');
+  el.querySelectorAll('.select-perfil-usuario').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const uid = sel.dataset.uid;
+      const novoRole = sel.value;
+      db.collection('usuarios').doc(uid).set({ role: novoRole }, { merge:true })
+        .then(()=> toast('Perfil atualizado!'))
+        .catch(err=>{ console.error(err); toast('Erro ao atualizar perfil: '+err.message, true); });
+    });
+  });
+}
+
+document.getElementById('btnCriarUsuario').addEventListener('click', ()=>{
+  const email = document.getElementById('novoUsuarioEmail').value.trim();
+  const senha = document.getElementById('novoUsuarioSenha').value;
+  const perfil = document.getElementById('novoUsuarioPerfil').value;
+  if(!email || !senha){ toast('Preencha e-mail e senha.', true); return; }
+  if(senha.length < 6){ toast('A senha precisa ter pelo menos 6 caracteres.', true); return; }
+
+  const btn = document.getElementById('btnCriarUsuario');
+  btn.disabled = true; btn.textContent = 'Criando...';
+
+  secondaryAuth.createUserWithEmailAndPassword(email, senha)
+    .then(cred=>{
+      const uid = cred.user.uid;
+      return db.collection('usuarios').doc(uid).set({
+        email, role: perfil, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(()=> secondaryAuth.signOut());
+    })
+    .then(()=>{
+      toast('Usuário criado com sucesso!');
+      document.getElementById('novoUsuarioEmail').value = '';
+      document.getElementById('novoUsuarioSenha').value = '';
+      document.getElementById('novoUsuarioPerfil').value = 'consulta';
+      carregarUsuarios();
+    })
+    .catch(err=>{
+      console.error(err);
+      const map = {
+        'auth/email-already-in-use':'Esse e-mail já está cadastrado.',
+        'auth/invalid-email':'E-mail inválido.',
+        'auth/weak-password':'Senha muito fraca (mínimo 6 caracteres).'
+      };
+      toast(map[err.code] || ('Erro ao criar usuário: '+err.message), true);
+    })
+    .finally(()=>{
+      btn.disabled = false; btn.textContent = '+ Criar usuário';
     });
 });
 
