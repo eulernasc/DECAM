@@ -1282,15 +1282,32 @@ function abrirModalDia(instrutorId, dayKey){
   const mesData = agendaDocs[key] || { dias:{} };
   const info = (mesData.dias && mesData.dias[dayKey]) || {};
 
-  diaEditando = { instrutorId, dayKey, key };
+  diaEditando = {
+    instrutorId, dayKey, key,
+    original: { atividade: info.atividade || '', carro: !!info.carro, paytrack: !!info.paytrack }
+  };
   document.getElementById('modalDiaTitle').textContent = `${inst ? inst.nome : ''} · ${dayKey}/${pad2(agendaMonth)}/${agendaYear}`;
   document.getElementById('fAtividade').value = info.atividade || '';
   document.getElementById('fCarro').checked = !!info.carro;
   document.getElementById('fPaytrack').checked = !!info.paytrack;
   document.getElementById('modalDia').classList.add('show');
 }
-document.getElementById('fecharModalDia').addEventListener('click', ()=> document.getElementById('modalDia').classList.remove('show'));
-document.getElementById('btnCancelarDia').addEventListener('click', ()=> document.getElementById('modalDia').classList.remove('show'));
+function diaTemAlteracoesNaoSalvas(){
+  if(!diaEditando || !diaEditando.original) return false;
+  const o = diaEditando.original;
+  return document.getElementById('fAtividade').value.trim() !== o.atividade
+      || document.getElementById('fCarro').checked !== o.carro
+      || document.getElementById('fPaytrack').checked !== o.paytrack;
+}
+function tentarFecharModalDia(){
+  if(diaTemAlteracoesNaoSalvas()){
+    if(!confirm('Você tem alterações não salvas nesse dia. Sair sem salvar?')) return;
+  }
+  document.getElementById('modalDia').classList.remove('show');
+  diaEditando = null;
+}
+document.getElementById('fecharModalDia').addEventListener('click', tentarFecharModalDia);
+document.getElementById('btnCancelarDia').addEventListener('click', tentarFecharModalDia);
 
 document.getElementById('btnSalvarDia').addEventListener('click', ()=>{
   if(!diaEditando) return;
@@ -1302,20 +1319,24 @@ document.getElementById('btnSalvarDia').addEventListener('click', ()=>{
   const btn = document.getElementById('btnSalvarDia');
   btn.disabled = true; btn.textContent = 'Salvando...';
 
+  // Merge robusto: pega o mapa "dias" já conhecido, atualiza só o dia em questão
+  // e regrava o mapa inteiro (evita depender de merge parcial em campo aninhado).
+  const mesAtual = agendaDocs[key] || { dias:{} };
+  const novoDias = { ...(mesAtual.dias || {}), [dayKey]: { atividade, carro, paytrack } };
+
   const payload = {
     instrutorId,
     ano: agendaYear,
     mes: agendaMonth,
-    [`dias.${dayKey}`]: { atividade, carro, paytrack }
+    dias: novoDias
   };
 
   db.collection('agenda').doc(key).set(payload, { merge:true })
     .then(()=>{
-      if(!agendaDocs[key]) agendaDocs[key] = { dias:{} };
-      if(!agendaDocs[key].dias) agendaDocs[key].dias = {};
-      agendaDocs[key].dias[dayKey] = { atividade, carro, paytrack };
+      agendaDocs[key] = { ...mesAtual, instrutorId, ano: agendaYear, mes: agendaMonth, dias: novoDias };
       renderAgenda();
       document.getElementById('modalDia').classList.remove('show');
+      diaEditando = null;
       toast('Dia atualizado!');
     })
     .catch(err=>{
@@ -1387,7 +1408,11 @@ function importarDadosPlanilha(){
 
 /* fechar modais clicando fora */
 document.querySelectorAll('.modal-backdrop').forEach(bg=>{
-  bg.addEventListener('click', e=>{ if(e.target === bg) bg.classList.remove('show'); });
+  bg.addEventListener('click', e=>{
+    if(e.target !== bg) return;
+    if(bg.id === 'modalDia'){ tentarFecharModalDia(); return; }
+    bg.classList.remove('show');
+  });
 });
 </script>
 </body>
