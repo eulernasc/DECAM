@@ -190,9 +190,10 @@
     border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow);
     border:1px solid var(--navy-700); position:relative; padding-top:5px;
     transition:transform .15s ease, box-shadow .15s ease;
+    display:flex; flex-direction:column;
   }
   .instr-card:hover{transform:translateY(-3px); box-shadow:0 18px 40px -16px rgba(15,35,64,.45);}
-  .instr-card .card-top{display:flex; gap:0;}
+  .instr-card .card-top{display:flex; gap:0; flex:1;}
   .instr-photo-wrap{
     width:190px; min-width:190px; padding:16px;
     background:linear-gradient(155deg, var(--orange-400) 0%, var(--orange-500) 45%, var(--orange-600) 100%);
