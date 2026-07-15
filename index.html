@@ -658,6 +658,13 @@
           <button class="btn btn-outline btn-sm" id="btnBulkFiliais" style="margin-top:6px;">Adicionar em massa</button>
         </details>
       </div>
+      <div class="catalogo-section" style="margin-top:24px; border-top:1px solid var(--line); padding-top:18px;">
+        <label>Manutenção</label>
+        <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px; line-height:1.5;">
+          Alguns instrutores importados da planilha antiga têm filiais/segmentos específicos junto com "⭐ Especialista" marcado — sobra da importação. Esse botão limpa isso: para quem já está marcado como Especialista, remove os valores específicos e deixa só "⭐ Especialista".
+        </div>
+        <button class="btn btn-outline btn-sm" id="btnLimparEspecialistas">🧹 Limpar dados redundantes de Especialistas</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-dark btn-sm" id="btnFecharCatalogo">Concluído</button>
@@ -1034,6 +1041,44 @@ document.getElementById('btnGerenciarCatalogo').addEventListener('click', ()=>{
 });
 document.getElementById('fecharModalCatalogo').addEventListener('click', ()=> document.getElementById('modalCatalogo').classList.remove('show'));
 document.getElementById('btnFecharCatalogo').addEventListener('click', ()=> document.getElementById('modalCatalogo').classList.remove('show'));
+
+document.getElementById('btnLimparEspecialistas').addEventListener('click', ()=>{
+  const afetados = instrutores.filter(i=>{
+    const segs = toArr(i.segmentoDedicado);
+    const fils = toArr(i.filiaisDedicado);
+    const segSujo = segs.includes('Especialista') && segs.length > 1;
+    const filSujo = fils.includes('Especialista') && fils.length > 1;
+    return segSujo || filSujo;
+  });
+
+  if(afetados.length === 0){
+    toast('Nada pra limpar — nenhum instrutor com dado redundante encontrado.');
+    return;
+  }
+
+  const nomes = afetados.map(i=> i.nome).join(', ');
+  if(!confirm(`Isso vai deixar só "Especialista" em Segmento e/ou Filiais para: ${nomes}. Os valores específicos (importados da planilha) serão removidos desses campos. Continuar?`)) return;
+
+  const btn = document.getElementById('btnLimparEspecialistas');
+  btn.disabled = true; btn.textContent = 'Limpando...';
+
+  const promises = afetados.map(i=>{
+    const segs = toArr(i.segmentoDedicado);
+    const fils = toArr(i.filiaisDedicado);
+    const novoSeg = segs.includes('Especialista') && segs.length > 1 ? ['Especialista'] : segs;
+    const novoFil = fils.includes('Especialista') && fils.length > 1 ? ['Especialista'] : fils;
+    return db.collection('instrutores').doc(i.id).update({
+      segmentoDedicado: novoSeg,
+      filiaisDedicado: novoFil,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  });
+
+  Promise.all(promises)
+    .then(()=> toast(`Limpeza concluída! ${afetados.length} instrutor(es) atualizado(s).`))
+    .catch(err=>{ console.error(err); toast('Erro na limpeza: '+err.message, true); })
+    .finally(()=>{ btn.disabled = false; btn.textContent = '🧹 Limpar dados redundantes de Especialistas'; });
+});
 
 function renderCatalogoModal(){
   const listSeg = document.getElementById('listaSegmentos');
