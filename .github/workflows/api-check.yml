@@ -1,0 +1,38 @@
+name: DECAM API - validação de segurança
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - 'scripts/gerar-chave-api.cjs'
+      - '.github/workflows/api-check.yml'
+  pull_request:
+    paths:
+      - 'functions/**'
+      - 'firebase.json'
+      - '.github/workflows/api-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar JSON e JavaScript
+        run: |
+          node --check functions/index.js
+          node --check functions/api.js
+          node --check scripts/gerar-chave-api.cjs
+          node -e "JSON.parse(require('fs').readFileSync('firebase.json'))"
+      - name: Testar rotas, autenticação e validação de dados
+        run: node --test functions/test/api.test.js
+      - name: Verificar dependências de implantação
+        run: |
+          npm --prefix functions install --no-audit --no-fund --ignore-scripts
+          node -e "require('./functions/node_modules/firebase-functions/v2/https'); require('./functions/node_modules/firebase-admin/app')"
