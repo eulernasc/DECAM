@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'functions/**'
+      - 'exemplos/**'
       - 'firebase.json'
       - '.firebaserc'
       - 'scripts/gerar-chave-api.cjs'
@@ -29,6 +30,7 @@ jobs:
           node --check functions/index.js
           node --check functions/api.js
           node --check scripts/gerar-chave-api.cjs
+          node --check exemplos/cliente-integracao.mjs
           node -e "JSON.parse(require('fs').readFileSync('firebase.json'))"
       - name: Testar rotas, autenticação e validação de dados
         run: node --test functions/test/api.test.js
