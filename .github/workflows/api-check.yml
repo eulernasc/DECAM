@@ -35,4 +35,5 @@ jobs:
       - name: Verificar dependências de implantação
         run: |
           npm --prefix functions install --no-audit --no-fund --ignore-scripts
-          node -e "require('./functions/node_modules/firebase-functions/v2/https'); require('./functions/node_modules/firebase-admin/app')"
+          cd functions
+          node -e "require('firebase-functions/v2/https'); require('firebase-admin/app'); require('./index.js'); console.log('Firebase SDK carregado com sucesso')"
