@@ -1,0 +1,19 @@
+{
+  "name": "decam-cloudflare-api",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "API externa somente leitura via Cloudflare Workers, com Firebase Spark",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/index.js",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
