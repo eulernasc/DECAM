@@ -12,3 +12,13 @@ functions/node_modules/
 functions/.runtimeconfig.json
 functions/.env*
 .DS_Store
+
+# Workers: segredos locais, dependências, build e credenciais de serviço
+worker/node_modules/
+worker/dist-test/
+worker/.dev.vars*
+worker/.env*
+worker/wrangler.toml.bak
+*service-account*.json
+*service_account*.json
+*credenciais*.json
