@@ -56,7 +56,7 @@ function firestoreFetch(url,options){
 }
 function handler(fetchImpl=firestoreFetch,options={}){
   return createWorkerHandler({cryptoImpl:webcrypto,fetchImpl,now:NOW,
-    tokenProvider:options.tokenProvider||async()=> "token-test"});
+    tokenProvider:options.tokenProvider||(async()=> "token-test")});
 }
 async function ask(h,path,options={}){
   const req=new Request(BASE+path,{method:options.method||"GET",headers:options.hasOwnProperty("key")?(options.key?{"X-API-Key":options.key}:{}):{"X-API-Key":KEY}});
