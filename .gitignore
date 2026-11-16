@@ -1,0 +1,14 @@
+# Credenciais, dependências e arquivos temporários
+.env
+.env.*
+*.local
+*.key
+*.pem
+serviceAccount*.json
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+functions/node_modules/
+functions/.runtimeconfig.json
+functions/.env*
+.DS_Store
