@@ -1,0 +1,10 @@
+'use strict';
+const {randomBytes,createHash}=require('node:crypto');
+const key='decam_'+randomBytes(32).toString('hex');
+const sha=createHash('sha256').update(key,'utf8').digest('hex');
+console.log('\nDECAM - credencial gerada localmente (NÃO subir ao GitHub)\n');
+console.log('CHAVE PARA O INTEGRADOR (guardar em cofre, compartilhar apenas por canal privado):');
+console.log(key);
+console.log('\nHASH PARA FIREBASE SECRET MANAGER - DECAM_API_KEY_HASH:');
+console.log(sha);
+console.log('\nAtenção: a chave só funciona após cadastrar o hash no Firebase e publicar a função.');
