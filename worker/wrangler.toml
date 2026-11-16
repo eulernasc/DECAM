@@ -1,0 +1,12 @@
+name = "decam-consulta-api"
+main = "src/index.js"
+compatibility_date = "2026-11-16"
+workers_dev = true
+
+[vars]
+FIREBASE_PROJECT_ID = "decam-2cf89"
+
+# Segredos de produção (obrigatórios):
+#   DECAM_API_KEY_HASH (SHA-256 hex da chave privada do parceiro)
+#   GOOGLE_SERVICE_ACCOUNT_JSON (JSON da conta de serviço com roles/datastore.viewer)
+# NÃO cole esses valores no wrangler.toml, no GitHub ou no frontend.
