@@ -1,0 +1,33 @@
+name: DECAM API Cloudflare - testes
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - '.github/workflows/worker-check.yml'
+  pull_request:
+    paths:
+      - 'worker/**'
+      - '.github/workflows/worker-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Conferir sintaxe do Worker
+        run: node --check worker/src/index.js
+      - name: Testar chaves, OAuth, Firestore e respostas
+        run: node --test worker/test/api.test.mjs
+      - name: Conferir bundle Cloudflare (sem publicar)
+        run: |
+          npm --prefix worker install --no-audit --no-fund --ignore-scripts
+          cd worker
+          npx wrangler deploy --dry-run --outdir=dist-test
