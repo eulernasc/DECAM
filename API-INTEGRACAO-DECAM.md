@@ -1,123 +1,78 @@
-# DECAM | API de consulta de programações (v1)
+# DECAM — API Cloudflare (Firebase Spark)
 
-**Situação:** código pronto para implantação. **Não está online até concluir o deploy do Firebase**.
-Repositório público: somente implementação e documentação. Nenhuma chave real foi publicada.
+**Status:** API implementada, testada e compilada. Ainda NÃO está online: falta configurar a Cloudflare e as credenciais do Google. **Não precisa de Blaze**.
 
-## Finalidade e origem dos dados
+## O que será entregue ao parceiro depois de ativar
 
-Permitir que um integrador autorizado atualize o próprio sistema consultando periodicamente os dados **atuais** da agenda DECAM no Firestore do projeto \`decam-2cf89\`. Não é necessário editar a agenda do DECAM.
+- URL real HTTPS do Worker (Cloudflare informa depois do deploy).
+- Chave de integração privada iniciada por decam_; deve ficar apenas no servidor do parceiro.
+- Endpoints GET /v1/instrutores e GET /v1/programacoes.
 
-A coleção \`instrutores\` contém os IDs/nome; os documentos da coleção \`agenda\` seguem \`{instrutorId}_{AAAA-MM}\` e o campo \`dias.{DD}\` guarda \`atividade\`, \`carro\`, \`paytrack\`. A API não usa o JSON de importação armazenado em \`index.html\`.
+## Consultas
 
-**Atenção:** \`atividade\` é texto livre (por exemplo \`BETIM\`, \`DSR\`, \`FÉRIAS\`, \`TREINAMENTO\`). Não se deve interpretar automaticamente toda atividade como destino de viagem. Não há horários na estrutura atual.
+Listar instrutores ativos: GET URL_REAL/v1/instrutores
+Programação de um dia: GET URL_REAL/v1/programacoes?instrutorId=marcos&data=2026-11-06
+Até 31 dias: GET URL_REAL/v1/programacoes?instrutorId=marcos&inicio=2026-11-01&fim=2026-11-30
 
-## Segurança
+Todas as chamadas precisam do cabeçalho HTTP X-API-Key com a chave privada.
 
-- Somente requisições HTTPS **GET** e campos explicitamente autorizados; não há criação, edição nem exclusão.
-- Header obrigatório \`X-API-Key: decam_<64 caracteres hexadecimais>\`. O Firebase guarda **apenas o hash SHA-256** dessa chave em Cloud Secret Manager (\`DECAM_API_KEY_HASH\`), não a chave original.
-- A API foi pensada para conexão **servidor a servidor**: **não inserir a chave no HTML, JavaScript do navegador, URLs, repositório, analytics ou logs**.
-- A função precisa aceitar invocação HTTP externa (Cloud Run), mas rejeita consultas de dados sem chave válida. CORS desativado para reduzir uso indevido pelo navegador; CORS não é uma medida de autenticação.
-- Saídas não incluem CPF, e-mail, telefone, matrícula nem outros campos do cadastro.
-- Há um limite de 60 consultas/minuto **por instância**, não uma cota global distribuída. Para controles globais avançados é necessário configurar política de API Gateway/Cloud Armor.
-- Respostas marcadas como \`Cache-Control: no-store\`; máximo de 31 dias por consulta; \`maxInstances: 3\` para limitar escala/custo. Monitore faturamento e configure alertas.
+Exemplo de programação fictícia: Marcos, 06/11/2026, atividade BETIM, carroAgendado true, paytrack true. A API real devolve os dados atuais do Firestore; a atividade também pode ser DSR, FÉRIAS, treinamento etc., não necessariamente uma cidade.
 
-## Rotas
+Retorno JSON: instrutor {id,nome}; inicio, fim; programacoes [{data,atividade,carroAgendado,paytrack,situacao}]; total; consultadoEm.
+Situações possíveis: programado, sem_atividade, sem_registro. O sistema parceiro deverá consultar periodicamente, por exemplo a cada 15 minutos, e atualizar por instrutor.id + data. A API não envia webhooks.
 
-Prefixo: **URL real da função \`decamApi\` informada após a implantação** (ex.: \`https://REGIAO-PROJETO.cloudfunctions.net/decamApi\`; não usar exemplo como endereço operacional).
+## Passo 1 — Conta de serviço somente leitura no Google Cloud
 
-### 1. GET /v1/instrutores
+Acessar: https://console.cloud.google.com/iam-admin/serviceaccounts?project=decam-2cf89
 
-Sem parâmetros. Lista instrutores ativos (somente \`id\` e \`nome\`).
+1. Criar conta de serviço nova e exclusiva (decam-api-readonly).
+2. Dar somente o papel Cloud Datastore Viewer (roles/datastore.viewer). NÃO usar Owner/Editor/Datastore User.
+3. Na aba Keys, gerar chave privada JSON, se a política permitir. Manter em local seguro, nunca enviar ao amigo, ao ChatGPT, ao GitHub ou ao frontend.
 
-Exemplo de resposta:
+ATENÇÃO: contas de serviço acessam dados com IAM, ignorando regras de segurança dos aplicativos Firestore. A permissão viewer dá acesso de leitura a outras coleções do projeto, mesmo que nossa API exponha só duas. Se a chave for comprometida, revogue-a imediatamente. A criação de chaves pode estar bloqueada por política organizacional; não a desative sem avaliar a segurança.
 
-\`\`\`json
-{
-  "instrutores": [{"id":"marcos","nome":"Marcos Batista Freire"}],
-  "total":1,
-  "consultadoEm":"2026-11-16T12:00:00.000Z"
-}
-\`\`\`
+## Passo 2 — Cloudflare Workers Free
 
-### 2. GET /v1/programacoes?instrutorId=marcos&data=2026-11-06
+Abrir https://dash.cloudflare.com/ e criar conta gratuita. Na pasta DECAM/worker, usando Node.js 22+ instalado:
 
-\`\`\`json
-{
-  "instrutor":{"id":"marcos","nome":"Marcos Batista Freire"},
-  "inicio":"2026-11-06",
-  "fim":"2026-11-06",
-  "programacoes":[{
-    "data":"2026-11-06",
-    "atividade":"BETIM",
-    "carroAgendado":true,
-    "paytrack":true,
-    "situacao":"programado"
-  }],
-  "total":1,
-  "consultadoEm":"2026-11-16T12:00:00.000Z"
-}
-\`\`\`
+    npm install
+    npx wrangler login
+    npx wrangler deploy
 
-**Importante:** o JSON de Betim é **ilustrativo**, inspirado no print. Não foi consultada uma gravação real do Firestore. A API retornará o que estiver salvo no Firestore no instante da consulta.
+O deploy cria o Worker decam-consulta-api. Antes de configurar os segredos, ele não permite consultas.
 
-### 3. GET /v1/programacoes?instrutorId=marcos&inicio=2026-11-01&fim=2026-11-30
+## Passo 3 — Segredos na Cloudflare
 
-Retorna \`programacoes\` com todos os dias do intervalo, inclusive aqueles sem registro. Aceita no máximo 31 dias; a consulta pode cruzar meses.
+Na pasta raiz DECAM, executar localmente (a chave gerada NÃO deve ser colada em conversa):
 
-Valores de \`situacao\`:
+    node scripts/gerar-chave-api.cjs
 
-- \`programado\`: existe texto de atividade.
-- \`sem_atividade\`: existe registro do dia, mas sem texto.
-- \`sem_registro\`: o dia não existe na agenda salva.
+O comando mostra uma chave privada decam_... para o parceiro e um hash SHA-256 de 64 caracteres.
 
-### Códigos de erro
+Cloudflare → Workers & Pages → decam-consulta-api → Settings → Variables and Secrets → Add Secret:
 
-\`400\` argumentos inválidos; \`401\` sem chave válida; \`404\` instrutor inexistente/inativo ou rota desconhecida; \`405\` método diferente de GET; \`429\` limite temporário; \`503\` segredo não provisionado ou falha transitória na consulta. Não expor erros detalhados ao integrador.
+- DECAM_API_KEY_HASH: colar somente o HASH gerado.
+- GOOGLE_SERVICE_ACCOUNT_JSON: colar o conteúdo integral do JSON da conta de serviço.
 
-## Ativação no Firebase (etapa ainda pendente)
+Ambos precisam ser do tipo Secret. NÃO adicionar no wrangler.toml, no GitHub ou no HTML.
+É possível usar a CLI na pasta worker: npx wrangler secret put DECAM_API_KEY_HASH e npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON.
+Se preferir a CLI para o JSON, preserve todos os caracteres/newlines e nunca copie a credencial para um comando versionado. Reimplantar se necessário: npx wrangler deploy.
 
-**Pré-requisito:** Firebase \`decam-2cf89\` no plano **Blaze** e usuário com permissão de deploy de Cloud Functions e Secret Manager. Cloud Functions precisa de conta de faturamento, mesmo possuindo franquia sem custo. Não há implantação automática a partir do GitHub Pages.
+## Passo 4 — Testar e entregar
 
-Execute na pasta raiz do projeto com Node.js 22 instalado:
+Copiar a URL HTTPS real terminada em workers.dev informada pela Cloudflare. Verificar do servidor (não navegador):
 
-\`\`\`bash
-node scripts/gerar-chave-api.cjs
-\`\`\`
+    curl -H "X-API-Key: SUA_CHAVE_PRIVADA" "URL_REAL/v1/instrutores"
+    curl -H "X-API-Key: SUA_CHAVE_PRIVADA" "URL_REAL/v1/programacoes?instrutorId=marcos&data=2026-11-06"
 
-O comando mostra **uma chave privada** para o integrador e **seu hash SHA-256**. Salve a chave em cofre e nunca faça commit ou envie em canal público.
+Chave inválida deve responder 401. URL, chave privada e exemplos de rotas são os únicos dados para enviar ao parceiro. Não expor a credencial de serviço Google.
 
-Instale/use a CLI, autentique e grave o **HASH** no Secret Manager:
+## Segurança, limites e validação
 
-\`\`\`bash
-npx firebase-tools@latest login
-npx firebase-tools@latest functions:secrets:set DECAM_API_KEY_HASH --project decam-2cf89
-\`\`\`
-
-Quando a CLI pedir o valor do segredo, **cole apenas o HASH de 64 caracteres, não a chave**.
-
-Confira as mudanças e implante somente a codebase da integração:
-
-\`\`\`bash
-npx firebase-tools@latest deploy --only functions:decam-integration --project decam-2cf89
-\`\`\`
-
-A função é \`decamApi\` na região \`southamerica-east1\`. A CLI mostrará a URL HTTPS **real**. Copie essa URL antes de enviar ao integrador. Não aceite qualquer solicitação de exclusão de função não relacionada.
-
-Para atualizar/rotacionar a chave, gere outro par e atualize o Secret Manager. Depois **publique novamente a função** para usar a nova versão do segredo; a chave antiga deixa de funcionar.
-
-### Teste após publicação
-
-No **servidor do integrador**, nunca no navegador:
-
-\`\`\`bash
-curl --fail-with-body -H "X-API-Key: SUA_CHAVE_PRIVADA" "URL_REAL/v1/instrutores"
-curl --fail-with-body -H "X-API-Key: SUA_CHAVE_PRIVADA" "URL_REAL/v1/programacoes?instrutorId=marcos&data=2026-11-06"
-\`\`\`
-
-A resposta deve corresponder à agenda atual do DECAM. Verifique retorno 401 com chave errada e 405 para POST. Somente depois disponibilize a integração para produção.
-
-## Contrato de atualização do sistema do integrador
-
-Esta é uma **API de consulta**, não um webhook. **A API não envia atualizações sozinha**: o sistema parceiro deve consultar periodicamente, como a cada 15 minutos, armazenando a última programação recebida e atualizando-a por \`instrutor.id + data\`. Também deve remover/substituir a programação anterior caso o DECAM altere uma atividade. Use \`consultadoEm\` como o horário da consulta, não como a data da última alteração da agenda.
-
-Não integre por leitura direta do Firestore: a chave de acesso à API só dá acesso às duas rotas aprovadas, não às demais coleções. Este sistema de integração não permite marcar voagens nem modificar operações.
+- API HTTP GET apenas, autenticada por chave de 256 bits; Worker guarda hash da chave, e JSON Google é protegido em segredo separado.
+- Google Service Account assina JWT RS256 pelo WebCrypto para receber token OAuth2 e consultar somente os documentos necessários em Firestore REST.
+- Não expõe CPF, telefone ou email; máximo de 31 dias por solicitação; bloqueia parâmetros duplicados; não habilita CORS; resposta sem cache.
+- Controle aproximado de 60 chamadas/min por isolate, não limite global distribuído. Cloudflare Workers Free tem cota diária e limite de CPU; Firestore Spark também tem cotas de leitura. Acima delas, as consultas podem falhar.
+- O plano Spark permanece ativo, sem Cloud Functions. Código antigo em functions/ e firebase.json é legado, NÃO usar para ativar esta integração.
+- Testes e empacotamento sem publicação: .github/workflows/worker-check.yml; módulo: worker/src/index.js; configuração: worker/wrangler.toml.
+- O campo consultadoEm é o instante da API, não o momento em que a agenda foi editada.
